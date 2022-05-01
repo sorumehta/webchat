@@ -1,4 +1,4 @@
-import React, { forwardRef, useRef } from 'react';
+import React, { forwardRef, useRef, useState } from 'react';
 
 import PropTypes from 'prop-types';
 import { Provider } from 'react-redux';
@@ -83,7 +83,7 @@ const ConnectedWidget = forwardRef((props, ref) => {
 
   const instanceSocket = useRef({});
   const store = useRef(null);
-
+  const [handedOff, setHandedOff] = useState(null)
   if (!instanceSocket.current.url && !(store && store.current && store.current.socketRef)) {
     instanceSocket.current = new Socket(
       props.socketUrl,
@@ -93,6 +93,10 @@ const ConnectedWidget = forwardRef((props, ref) => {
       props.protocolOptions,
       props.onSocketEvent
     );
+  }
+
+  const handoffHandler = (conv_id) => {
+    setHandedOff(conv_id)
   }
 
   if (!instanceSocket.current.url && store && store.current && store.current.socketRef) {
@@ -113,6 +117,8 @@ const ConnectedWidget = forwardRef((props, ref) => {
     store.current.socketRef = instanceSocket.current.marker;
     store.current.socket = instanceSocket.current;
   }
+  const handoffSocket = handedOff ? new WebSocket(`wss://${props.chatwootEndpoint}/cable`) : null
+  
   return (
     <Provider store={store.current}>
       <ThemeContext.Provider
@@ -146,7 +152,7 @@ const ConnectedWidget = forwardRef((props, ref) => {
           closeImage={props.closeImage}
           customComponent={props.customComponent}
           displayUnreadCount={props.displayUnreadCount}
-          socket={instanceSocket.current}
+          socket={handedOff ? handoffSocket : instanceSocket.current}
           showMessageDate={props.showMessageDate}
           customMessageDelay={props.customMessageDelay}
           tooltipPayload={props.tooltipPayload}
@@ -155,6 +161,9 @@ const ConnectedWidget = forwardRef((props, ref) => {
           defaultHighlightCss={props.defaultHighlightCss}
           defaultHighlightAnimation={props.defaultHighlightAnimation}
           defaultHighlightClassname={props.defaultHighlightClassname}
+          handedOff={handedOff}
+          handoffHandler={handoffHandler}
+          chatServerEndpoint={props.chatServerEndpoint}
         />
       </ThemeContext.Provider>
     </Provider>
@@ -208,7 +217,9 @@ ConnectedWidget.propTypes = {
   userTextColor: PropTypes.string,
   userBackgroundColor: PropTypes.string,
   assistTextColor: PropTypes.string,
-  assistBackgoundColor: PropTypes.string
+  assistBackgoundColor: PropTypes.string,
+  chatServerEndpoint: PropTypes.string,
+  chatwootEndpoint: PropTypes.string
 };
 
 ConnectedWidget.defaultProps = {

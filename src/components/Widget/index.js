@@ -54,8 +54,8 @@ class Widget extends Component {
 
 
   componentDidMount() {
-    const { connectOn, autoClearCache, storage, dispatch, defaultHighlightAnimation } = this.props;
-
+    const { connectOn, autoClearCache, storage, dispatch, defaultHighlightAnimation, handedOff } = this.props;
+    console.log(`inside componentDidMount where handedOff is ${handedOff}`)
     // add the default highlight css to the document
     const styleNode = document.createElement('style');
     styleNode.innerHTML = defaultHighlightAnimation;
@@ -85,13 +85,21 @@ class Widget extends Component {
   }
 
   componentDidUpdate() {
-    const { isChatOpen, dispatch, embedded, initialized } = this.props;
+    const { isChatOpen, dispatch, embedded, initialized, handedOff, socket } = this.props;
+    console.log(`inside componentDidUpdate where handedOff is ${handedOff}`)
+    
 
     if (isChatOpen) {
-      if (!initialized) {
+      console.log(`socket.readyState = ${socket.readyState}`)
+      if(handedOff && socket.readyState != WebSocket.OPEN){
         this.initializeWidget();
+      } else{
+        if (!initialized) {
+          this.initializeWidget();
+        }
+        this.trySendInitPayload();
       }
-      this.trySendInitPayload();
+      
     }
 
     if (embedded && initialized) {
@@ -350,6 +358,7 @@ class Widget extends Component {
   }
 
   initializeWidget(sendInitPayload = true) {
+    console.log("inside initializeWidget")
     const {
       storage,
       socket,
@@ -358,9 +367,58 @@ class Widget extends Component {
       initialized,
       connectOn,
       tooltipPayload,
-      tooltipDelay
+      tooltipDelay,
+      handedOff,
+      chatServerEndpoint
     } = this.props;
-    if (!socket.isInitialized()) {
+    console.log(`handedOff = ${handedOff}, chatServerEndpoint = ${chatServerEndpoint}`)
+    if (handedOff){
+      const conv_id = handedOff
+      console.log("initialising widget for handoff...")
+      socket.addEventListener('open', function (event) {
+        console.log("websocket connection established.")
+        const conv_id = handedOff
+        if(conv_id){
+          fetch(chatServerEndpoint + `/conversations/${conv_id}/pubsub`)
+            .then(response => response.json())
+            .then(data => {
+              console.log("data returned:")
+              console.log(data)
+              if(data.pubsub){
+                console.log(`recieved pubsub token = ${data.pubsub}`)
+                console.log("sending subscription request to live chat server")
+                socket.send(JSON.stringify({ command:"subscribe", identifier: "{\"channel\":\"RoomChannel\",\"pubsub_token\":\""+ data.pubsub+"\"}" }));
+
+              }
+            }).catch(e => {
+              console.error(e)
+              resolve(null)
+            })
+          
+        }
+      });
+
+      socket.addEventListener('message', function (event) {
+          
+        const event_data = JSON.parse(event.data)
+        if(event_data.message){
+          const event_type = event_data.message.event
+          console.log(`event type: ${event_type}`)
+          if(event_type === 'message.created'){
+            const message_data = event_data.message.data
+            if (message_data.message_type === 1){
+              console.log(`new message from agent: ${message_data.content}`)
+              
+            }
+          }
+        } 
+        else{
+          console.log(`unknown event:`)
+          console.log(event_data)
+        }
+      });
+    }
+    else if (!socket.isInitialized()) {
       socket.createSocket();
 
       socket.on('bot_uttered', (botUttered) => {
@@ -528,6 +586,7 @@ class Widget extends Component {
     this.props.dispatch(toggleFullScreen());
   }
 
+
   dispatchMessage(message) {
     if (Object.keys(message).length === 0) {
       return;
@@ -561,7 +620,12 @@ class Widget extends Component {
     } else {
       // some custom message
       const props = messageClean;
-      if (this.props.customComponent) {
+      if (props.hasOwnProperty('handoff_host')){
+        console.log(props)
+        this.props.socket.close()
+        this.props.handoffHandler(props.conv_id)
+      }
+      else if (this.props.customComponent) {
         this.props.dispatch(renderCustomComponent(this.props.customComponent, props, true));
       }
     }
@@ -660,7 +724,10 @@ Widget.propTypes = {
   defaultHighlightAnimation: PropTypes.string,
   defaultHighlightCss: PropTypes.string,
   defaultHighlightClassname: PropTypes.string,
-  messages: ImmutablePropTypes.listOf(ImmutablePropTypes.map)
+  messages: ImmutablePropTypes.listOf(ImmutablePropTypes.map),
+  handedOff: PropTypes.string,
+  handoffHandler: PropTypes.func,
+  chatServerEndpoint: PropTypes.string
 };
 
 Widget.defaultProps = {
