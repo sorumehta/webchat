@@ -163,6 +163,10 @@ class Widget extends Component {
 
     // we extract metadata so we are sure it does not interfer with type checking of the message
     const { metadata, ...message } = messageWithMetadata;
+    console.log(`message: `)
+    console.log(message)
+    console.log("metadata:")
+    console.log(metadata)
     if (!isChatOpen) {
       this.dispatchMessage(message);
       dispatch(newUnreadMessage());
@@ -368,18 +372,16 @@ class Widget extends Component {
       connectOn,
       tooltipPayload,
       tooltipDelay,
-      handedOff,
-      chatServerEndpoint
+      handedOff
     } = this.props;
-    console.log(`handedOff = ${handedOff}, chatServerEndpoint = ${chatServerEndpoint}`)
+    console.log(`handedOff = ${JSON.stringify(handedOff)}`)
     if (handedOff){
-      const conv_id = handedOff
+      const {conv_id} = handedOff
       console.log("initialising widget for handoff...")
       socket.addEventListener('open', function (event) {
         console.log("websocket connection established.")
-        const conv_id = handedOff
         if(conv_id){
-          fetch(chatServerEndpoint + `/conversations/${conv_id}/pubsub`)
+          fetch(handedOff.handoff_host + `/conversations/${conv_id}/pubsub`)
             .then(response => response.json())
             .then(data => {
               console.log("data returned:")
@@ -397,6 +399,7 @@ class Widget extends Component {
           
         }
       });
+      const that = this
 
       socket.addEventListener('message', function (event) {
           
@@ -408,7 +411,7 @@ class Widget extends Component {
             const message_data = event_data.message.data
             if (message_data.message_type === 1){
               console.log(`new message from agent: ${message_data.content}`)
-              
+              that.handleMessageReceived({text: message_data.content})
             }
           }
         } 
@@ -622,8 +625,12 @@ class Widget extends Component {
       const props = messageClean;
       if (props.hasOwnProperty('handoff_host')){
         console.log(props)
+        if (props.text){
+          this.props.dispatch(addResponseMessage(props.text));
+        }
+        
         this.props.socket.close()
-        this.props.handoffHandler(props.conv_id)
+        this.props.handoffHandler(props)
       }
       else if (this.props.customComponent) {
         this.props.dispatch(renderCustomComponent(this.props.customComponent, props, true));
@@ -635,11 +642,34 @@ class Widget extends Component {
   }
 
   handleMessageSubmit(event) {
+    const { handedOff } = this.props;
     event.preventDefault();
     const userUttered = event.target.message.value;
     if (userUttered) {
       this.props.dispatch(addUserMessage(userUttered));
-      this.props.dispatch(emitUserMessage(userUttered));
+      if(handedOff == null){
+        this.props.dispatch(emitUserMessage(userUttered));
+      } else{
+        console.log(`posting message ${userUttered} to Chatwoot...`)
+        const fetchOptions =  {
+          method: "POST",
+          body: JSON.stringify({message: userUttered}),
+          headers: {
+            "Content-Type": "application/json"
+          }
+        }
+    
+        fetch(
+          `${handedOff.handoff_host}/api/v1/accounts/${handedOff.account_id}/conversations/${handedOff.conv_id}/messages/webhooks/rest/webhook`,
+          fetchOptions
+        ).then(response => {
+          if (response.status !== 200){
+            console.error(`Error posting message on chatwoot. Status: ${response.status}`)
+            console.log(response)
+          }
+        })
+      }
+      
     }
     event.target.message.value = '';
   }
@@ -725,9 +755,8 @@ Widget.propTypes = {
   defaultHighlightCss: PropTypes.string,
   defaultHighlightClassname: PropTypes.string,
   messages: ImmutablePropTypes.listOf(ImmutablePropTypes.map),
-  handedOff: PropTypes.string,
-  handoffHandler: PropTypes.func,
-  chatServerEndpoint: PropTypes.string
+  handedOff: PropTypes.shape({}),
+  handoffHandler: PropTypes.func
 };
 
 Widget.defaultProps = {

@@ -95,8 +95,14 @@ const ConnectedWidget = forwardRef((props, ref) => {
     );
   }
 
-  const handoffHandler = (conv_id) => {
-    setHandedOff(conv_id)
+  const handoffHandler = (handoff_obj) => {
+    if (handoff_obj && handoff_obj.conv_id && handoff_obj.account_id && handoff_obj.handoff_host){
+      setHandedOff(handoff_obj)
+    } else{
+      console.error("invalid handoff object:")
+      console.log(handoff_obj)
+    }
+    
   }
 
   if (!instanceSocket.current.url && store && store.current && store.current.socketRef) {
@@ -117,7 +123,7 @@ const ConnectedWidget = forwardRef((props, ref) => {
     store.current.socketRef = instanceSocket.current.marker;
     store.current.socket = instanceSocket.current;
   }
-  const handoffSocket = handedOff ? new WebSocket(`wss://${props.chatwootEndpoint}/cable`) : null
+  const handoffSocket = handedOff ? new WebSocket(`wss://${handedOff.chatwoot_endpoint}/cable`) : null
   
   return (
     <Provider store={store.current}>
@@ -163,7 +169,6 @@ const ConnectedWidget = forwardRef((props, ref) => {
           defaultHighlightClassname={props.defaultHighlightClassname}
           handedOff={handedOff}
           handoffHandler={handoffHandler}
-          chatServerEndpoint={props.chatServerEndpoint}
         />
       </ThemeContext.Provider>
     </Provider>
@@ -217,9 +222,7 @@ ConnectedWidget.propTypes = {
   userTextColor: PropTypes.string,
   userBackgroundColor: PropTypes.string,
   assistTextColor: PropTypes.string,
-  assistBackgoundColor: PropTypes.string,
-  chatServerEndpoint: PropTypes.string,
-  chatwootEndpoint: PropTypes.string
+  assistBackgoundColor: PropTypes.string
 };
 
 ConnectedWidget.defaultProps = {

@@ -6,11 +6,9 @@
       const load = () => {
         if (!WebChat) setTimeout(load, 100);
         if (WebChat) WebChat.default({
-          customData:{language:"en", model_name: "kk3JbArgMZSwRxbcw"},
-          socketUrl:"http://localhost:5005",
-          withRules: true,
-          chatServerEndpoint:"http://localhost:3033",
-          chatwootEndpoint:"app.chatwoot.com"
+          customData:{language:"en"},
+          socketUrl:"https://bot.esslsecurity.com",
+          withRules: true
         });
       }
       setTimeout(load, 200);
